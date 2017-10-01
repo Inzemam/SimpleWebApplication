@@ -1,0 +1,176 @@
+# Copyright 2016 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Conformance requirements:
+# See: https://github.com/google/closure-compiler/wiki/JS-Conformance-Framework
+
+
+# Disallow throwing non-Error types.
+requirement: {
+  type: CUSTOM
+  java_class:
+      'com.google.javascript.jscomp.ConformanceRules$BanThrowOfNonErrorTypes'
+  error_message: 'Throwing non-Error types or Error itself is not allowed: '
+                 'throw shaka.util.Error instead.'
+  whitelist_regexp: 'test/*'
+}
+
+# Ban accessing members of unknown types.
+requirement: {
+  type: CUSTOM
+  java_class: 'com.google.javascript.jscomp.ConformanceRules$'
+              'BanUnknownTypedClassPropsReferences'
+  error_message: 'Using properties of unknown types is not allowed: add an '
+                 'explicit type to the variable.'
+  whitelist_regexp: 'demo/*'
+}
+
+requirement: {
+  type: BANNED_CODE_PATTERN
+  value: 'function template() { throw new Error(); }'
+  error_message: 'Throwing non-Error types or Error itself is not allowed: '
+                 'throw shaka.util.Error instead.'
+  whitelist_regexp: 'test/*'
+}
+
+
+# Disallow using "!" on nullable numbers in boolean assignment.
+# Note: we can't use the pattern "var b = !n" because it causes too many
+# false positives.
+requirement: {
+  type: BANNED_CODE_PATTERN
+  value: '/** @param {boolean} b @param {?number} n */ '
+         'function template(b, n) { b = !n; }'
+  error_message: 'Using "!" on nullable numbers in boolean assignment '
+                 'is not allowed: use an explicit comparison instead.'
+}
+
+
+# Disallow console.log.
+requirement: {
+  type: BANNED_PROPERTY_CALL
+  value: 'Console.prototype.log'
+  error_message: 'Using "console.log" is not allowed: '
+                 'use shaka.log instead'
+}
+
+
+# Disallow Element.children.
+requirement: {
+  type: BANNED_PROPERTY
+  value: 'Element.prototype.children'
+  error_message: 'Using "Element.children" is not allowed: '
+                 'use Node.childNodes instead'
+}
+
+
+# Disallow fdescribe.
+requirement: {
+  type: BANNED_NAME
+  value: 'fdescribe'
+  error_message: 'Using "fdescribe" is not allowed'
+}
+
+
+# Disallow fit.
+requirement: {
+  type: BANNED_NAME
+  value: 'fit'
+  error_message: 'Using "fit" is not allowed'
+  whitelist_regexp: 'test/player_integration.js'
+}
+
+
+#Disallow classList toggle.
+requirement: {
+  type: BANNED_PROPERTY_CALL
+  value: 'DOMTokenList.prototype.toggle'
+  error_message: 'classList toggle is not supported in IE11'
+}
+
+
+# Disallow ES6 methods.
+requirement: {
+  type: BANNED_PROPERTY
+  value: 'Array.prototype.entries'
+  value: 'Array.prototype.keys'
+  value: 'Array.prototype.values'
+  value: 'Array.prototype.find'
+  value: 'Array.prototype.findIndex'
+  value: 'Array.prototype.copyWithin'
+  value: 'Array.prototype.fill'
+  value: 'Array.prototype.includes'
+  error_message: 'ES6 Array methods are not allowed '
+                 'because they are not supported in IE11'
+}
+requirement: {
+  type: BANNED_NAME
+  value: 'Array.from'
+  value: 'Array.of'
+  error_message: 'ES6 Array methods are not allowed '
+                 'because they are not supported in IE11'
+}
+requirement: {
+  type: BANNED_PROPERTY
+  value: 'String.prototype.startsWith'
+  value: 'String.prototype.endsWith'
+  value: 'String.prototype.includes'
+  error_message: 'ES6 String methods are not allowed '
+                 'because they are not supported in IE11'
+}
+requirement: {
+  type: BANNED_PROPERTY
+  value: 'ArrayBuffer.prototype.slice'
+  error_message: 'ArrayBuffer.slice is not allowed because it '
+                 'is not supported on Tizen 2016'
+}
+requirement: {
+  type: BANNED_NAME
+  value: 'ArrayBuffer.isView'
+  error_message: 'ES6 ArrayBuffer methods are not allowed '
+                 'because they are not supported in IE11'
+}
+requirement: {
+  type: BANNED_NAME
+  value: 'Int8Array.of'
+  value: 'Int8Array.from'
+  value: 'Uint8Array.of'
+  value: 'Uint8Array.from'
+  value: 'Uint8ClampedArray.of'
+  value: 'Uint8ClampedArray.from'
+  value: 'Int16Array.of'
+  value: 'Int16Array.from'
+  value: 'Uint16Array.of'
+  value: 'Uint16Array.from'
+  value: 'Int32Array.of'
+  value: 'Int32Array.from'
+  value: 'Uint32Array.of'
+  value: 'Uint32Array.from'
+  value: 'Float32Array.of'
+  value: 'Float32Array.from'
+  value: 'Float64Array.of'
+  value: 'Float64Array.from'
+  error_message: 'ES6 TypedArray methods are not allowed '
+                 'because they are not supported in IE11'
+}
+requirement: {
+  type: BANNED_NAME
+  value: 'Map'
+  value: 'WeakMap'
+  value: 'Set'
+  value: 'WeakSet'
+  error_message: 'ES6 Maps and Sets are not allowed '
+                 'because they are not supported in IE11'
+}

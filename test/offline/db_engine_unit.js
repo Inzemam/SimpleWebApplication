@@ -1,0 +1,246 @@
+/**
+ * @license
+ * Copyright 2016 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+describe('DBEngine', /** @suppress {accessControls} */ function() {
+  /** @const */
+  var oldName = shaka.offline.DBEngine.DB_NAME_;
+
+  /** @type {!shaka.offline.DBEngine} */
+  var db;
+  /** @type {!Object.<string, string>} */
+  var schema;
+
+  beforeAll(function() {
+    if (shaka.offline.DBEngine.isSupported()) {
+      shaka.offline.DBEngine.DB_NAME_ += '_test';
+    }
+  });
+
+  beforeEach(function(done) {
+    if (shaka.offline.DBEngine.isSupported()) {
+      schema = {'test': 'key', 'other': 'key'};
+      shaka.offline.DBEngine.deleteDatabase().then(function() {
+        db = new shaka.offline.DBEngine();
+        return db.init(schema, /* opt_retryCount */ 5);
+      }).catch(fail).then(done);
+    } else {
+      done();
+    }
+  });
+
+  afterAll(function() {
+    if (shaka.offline.DBEngine.isSupported()) {
+      shaka.offline.DBEngine.DB_NAME_ = oldName;
+    }
+  });
+
+  afterEach(function(done) {
+    if (shaka.offline.DBEngine.isSupported()) {
+      db.destroy().catch(fail).then(done);
+    } else {
+      done();
+    }
+  });
+
+  it('stores and retrieves values', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    var data = {
+      key: 123,
+      extra: 'foobar'
+    };
+    db.insert('test', data).then(function() {
+      return db.get('test', 123);
+    }).then(function(actual) {
+      expect(actual).toEqual(data);
+    }).catch(fail).then(done);
+  });
+
+  it('supports concurrent operations', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    var data1 = {key: 1, extra: 'cat'};
+    var data2 = {key: 2, foobar: 'baz'};
+    var data3 = {key: 3, abc: 123};
+    var data4 = {key: 4, utf: [1, 2, 3]};
+    Promise.all([
+      db.insert('test', data1),
+      db.insert('test', data2),
+      db.insert('other', data3),
+      db.insert('test', data4)
+    ]).then(function() {
+      return Promise.all([
+        db.get('test', 1),
+        db.get('test', 2),
+        db.get('other', 3),
+        db.get('test', 4)
+      ]);
+    }).then(function(data) {
+      expect(data[0]).toEqual(data1);
+      expect(data[1]).toEqual(data2);
+      expect(data[2]).toEqual(data3);
+      expect(data[3]).toEqual(data4);
+    }).catch(fail).then(done);
+  });
+
+  it('supports remove', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    Promise.all([
+      db.insert('test', {key: 1, i: 4}),
+      db.insert('test', {key: 2, i: 1}),
+      db.insert('test', {key: 3, i: 2}),
+      db.insert('test', {key: 4, i: 9}),
+      db.insert('test', {key: 5, i: 8}),
+      db.insert('test', {key: 6, i: 7})
+    ]).then(function() {
+      return db.remove('test', 2);
+    }).then(function() {
+      return db.get('test', 2);
+    }).then(function(data) {
+      expect(data).toBeFalsy();
+      return db.removeKeys('test', [4, 5, 6]);
+    }).then(function() {
+      return db.get('test', 5);
+    }).then(function(data) {
+      expect(data).toBeFalsy();
+      return db.get('test', 3);
+    }).then(function(data) {
+      expect(data).toBeTruthy();
+    }).catch(fail).then(done);
+  });
+
+  it('supports iterating over each element', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    var testData = [
+      {key: 1, i: 4},
+      {key: 2, i: 1},
+      {key: 3, i: 2},
+      {key: 4, i: 9}
+    ];
+    var spy = jasmine.createSpy('forEach');
+    Promise.all(testData.map(db.insert.bind(db, 'test')))
+        .then(function() {
+          return db.forEach('test', shaka.test.Util.spyFunc(spy));
+        })
+        .then(function() {
+          expect(spy).toHaveBeenCalledTimes(testData.length);
+          for (var i = 0; i < testData.length; i++)
+            expect(spy).toHaveBeenCalledWith(testData[i]);
+        })
+        .catch(fail)
+        .then(done);
+  });
+
+  it('aborts transactions on destroy()', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    var expectedError = new shaka.util.Error(
+        shaka.util.Error.Severity.CRITICAL,
+        shaka.util.Error.Category.STORAGE,
+        shaka.util.Error.Code.OPERATION_ABORTED);
+    var insert1Finished = false, insert2Finished = false;
+    db.insert('test', {key: 1}).then(fail, function(error) {
+      shaka.test.Util.expectToEqualError(error, expectedError);
+      insert1Finished = true;
+    });
+    db.insert('test', {key: 2}).then(fail, function(error) {
+      shaka.test.Util.expectToEqualError(error, expectedError);
+      insert2Finished = true;
+    });
+
+    db.destroy()
+        .catch(fail)
+        .then(function() {
+          // Insert a slight delay to avoid a race between this callback and
+          // the above callbacks.
+          return shaka.test.Util.delay(0.001);
+        })
+        .then(function() {
+          expect(insert1Finished).toBe(true);
+          expect(insert2Finished).toBe(true);
+          done();
+        });
+  });
+
+  it('will find and reserve IDs', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+    Promise
+        .all([
+          db.insert('test', {key: 1}),
+          db.insert('test', {key: 2}),
+          db.insert('other', {key: 4}),  // Max
+          db.insert('test', {key: 6}),
+          db.insert('test', {key: 9}),  // Max
+          db.insert('other', {key: 3}),
+          db.insert('other', {key: 1})
+        ])
+        // Destroy the database to refresh the IDs.
+        .then(function() { return db.destroy(); })
+        .then(function() {
+          db = new shaka.offline.DBEngine();
+          return db.init(schema);
+        })
+        .then(function() {
+          expect(db.reserveId('test')).toBe(10);
+          expect(db.reserveId('test')).toBe(11);
+          expect(db.reserveId('other')).toBe(5);
+          expect(db.reserveId('test')).toBe(12);
+          expect(db.reserveId('test')).toBe(13);
+          expect(db.reserveId('other')).toBe(6);
+        })
+        .catch(fail)
+        .then(done);
+  });
+
+  it('will catch aborting transactions', function(done) {
+    if (!shaka.offline.DBEngine.isSupported()) {
+      pending('DBEngine is not supported on this platform.');
+    }
+
+    // Change the insert function so that once the put request completes
+    // the transaction will abort. This should cause the promise to be
+    // rejected.
+    db.insert = function(storeName, value) {
+      return this.createTransaction_(storeName, 'readwrite', function(store) {
+        var request = store.put(value);
+        request.onsuccess = function(event) {
+          request.transaction.abort();
+        };
+      });
+    };
+
+    var expected = new shaka.util.Error(
+        shaka.util.Error.Severity.CRITICAL,
+        shaka.util.Error.Category.STORAGE,
+        shaka.util.Error.Code.OPERATION_ABORTED);
+
+    db.insert('test', {key: 1}).then(fail, function(error) {
+      shaka.log.info('insert failed as expected ', error);
+      shaka.test.Util.expectToEqualError(error, expected);
+      done();
+    });
+  });
+});
